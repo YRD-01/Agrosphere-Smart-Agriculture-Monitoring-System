@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="theme-color" content="#2E7D32"/>
+<meta name="description" content="AgroSphere - Smart Farm IoT Controller"/>
+<title>AgroSphere</title>
+
+<!-- Styles -->
+<link rel="stylesheet" href="css/main.css"/>
+<link rel="stylesheet" href="css/components.css"/>
+<link rel="stylesheet" href="css/mobile.css"/>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<!-- MQTT.js (Paho) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/mqttws31.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     BOTTOM SHEETS / MODALS
+═══════════════════════════════════════════ -->
+
+<!-- Add Crop Sheet -->
+<div class="sheet-overlay" id="sh-addcrop">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <span class="sheet-title">Add new crop</span>
+      <button class="sheet-close" onclick="UI.closeSheet('sh-addcrop')">×</button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Crop name *</label><input class="form-input" id="fc-name" placeholder="e.g. Wheat"/></div>
+        <div class="form-group"><label class="form-label">Field *</label><input class="form-input" id="fc-field" placeholder="e.g. Field C"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Area (ha)</label><input class="form-input" id="fc-area" type="number" placeholder="2.5" min="0.1" step="0.1"/></div>
+        <div class="form-group"><label class="form-label">Growth stage</label>
+          <select class="form-input form-select" id="fc-stage">
+            <option>Germination</option><option>Seedling</option><option selected>Vegetative</option>
+            <option>Tillering</option><option>Flowering</option><option>Grain filling</option><option>Maturity</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Water (L/m²/day)</label><input class="form-input" id="fc-water" type="number" placeholder="12" min="1" max="50"/></div>
+        <div class="form-group"><label class="form-label">Pesticide (mL/L)</label><input class="form-input" id="fc-pest" type="number" placeholder="2.4" step="0.1" min="0.1"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Assign ESP32 device</label>
+        <select class="form-input form-select" id="fc-device"><option value="">None</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Planting date</label><input class="form-input" id="fc-date" type="date"/></div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="UI.closeSheet('sh-addcrop')">Cancel</button>
+        <button class="btn btn-primary" onclick="CropManager.save()">Add crop</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Crop Sheet -->
+<div class="sheet-overlay" id="sh-editcrop">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header"><span class="sheet-title">Edit crop</span><button class="sheet-close" onclick="UI.closeSheet('sh-editcrop')">×</button></div>
+    <div class="sheet-body">
+      <input type="hidden" id="ec-idx"/>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Crop name</label><input class="form-input" id="ec-name"/></div>
+        <div class="form-group"><label class="form-label">Field</label><input class="form-input" id="ec-field"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Area (ha)</label><input class="form-input" id="ec-area" type="number" step="0.1"/></div>
+        <div class="form-group"><label class="form-label">Growth stage</label>
+          <select class="form-input form-select" id="ec-stage">
+            <option>Germination</option><option>Seedling</option><option>Vegetative</option>
+            <option>Tillering</option><option>Flowering</option><option>Grain filling</option><option>Maturity</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Water (L/m²/day)</label><input class="form-input" id="ec-water" type="number"/></div>
+        <div class="form-group"><label class="form-label">Pesticide (mL/L)</label><input class="form-input" id="ec-pest" type="number" step="0.1"/></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="UI.closeSheet('sh-editcrop')">Cancel</button>
+        <button class="btn btn-primary" onclick="CropManager.update()">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Device Sheet -->
+<div class="sheet-overlay" id="sh-adddev">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header"><span class="sheet-title">Register ESP32</span><button class="sheet-close" onclick="UI.closeSheet('sh-adddev')">×</button></div>
+    <div class="sheet-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Device name *</label><input class="form-input" id="fd-name" placeholder="ESP32-FieldC-04"/></div>
+        <div class="form-group"><label class="form-label">MAC address</label><input class="form-input" id="fd-mac" placeholder="A4:CF:12:XX:XX:XX"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Sensors</label>
+        <div class="checkbox-grid">
+          <label><input type="checkbox" id="s-soil" checked> Soil</label>
+          <label><input type="checkbox" id="s-temp" checked> Temp</label>
+          <label><input type="checkbox" id="s-hum"> Humidity</label>
+          <label><input type="checkbox" id="s-light"> Light</label>
+          <label><input type="checkbox" id="s-wind"> Wind</label>
+          <label><input type="checkbox" id="s-rain"> Rain</label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Connection</label>
+          <select class="form-input form-select" id="fd-conn">
+            <option value="wifi">Wi-Fi</option><option value="bluetooth">Bluetooth</option><option value="lora">LoRa</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">IP / address</label><input class="form-input" id="fd-ip" placeholder="192.168.1.xx"/></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="UI.closeSheet('sh-adddev')">Cancel</button>
+        <button class="btn btn-primary" onclick="DeviceManager.save()">Register</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Wi-Fi Connect Sheet -->
+<div class="sheet-overlay" id="sh-wifi">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header"><span class="sheet-title">Connect to Wi-Fi</span><button class="sheet-close" onclick="UI.closeSheet('sh-wifi')">×</button></div>
+    <div class="sheet-body">
+      <div id="wifi-scan-list"><div class="scanning"><div class="scan-dot"></div><div class="scan-dot"></div><div class="scan-dot"></div><span>Scanning…</span></div></div>
+      <div class="divider"></div>
+      <div class="form-group"><label class="form-label">Or enter manually</label><input class="form-input" id="wf-ssid" placeholder="Network name (SSID)"/></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="wf-pass" type="password" placeholder="Wi-Fi password"/></div>
+      <div id="wf-status" style="display:none" class="status-msg"></div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="UI.closeSheet('sh-wifi')">Cancel</button>
+        <button class="btn btn-primary" id="wf-btn" onclick="NetworkManager.connectWifi()">Connect</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bluetooth Sheet -->
+<div class="sheet-overlay" id="sh-bt">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header"><span class="sheet-title">Bluetooth devices</span><button class="sheet-close" onclick="UI.closeSheet('sh-bt')">×</button></div>
+    <div class="sheet-body">
+      <div id="bt-scan-list"></div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="UI.closeSheet('sh-bt')">Cancel</button>
+        <button class="btn btn-primary" onclick="NetworkManager.runBtScan()">Scan again</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LoRa Config Sheet -->
+<div class="sheet-overlay" id="sh-lora">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header"><span class="sheet-title">LoRa configuration</span><button class="sheet-close" onclick="UI.closeSheet('sh-lora')">×</button></div>
+    <div class="sheet-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Frequency (MHz)</label>
+          <select class="form-input form-select" id="lora-freq"><option>868</option><option selected>915</option><option>433</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Spreading factor</label>
+          <select class="form-input form-select" id="lora-sf">
+            <option>SF7</option><option>SF8</option><option>SF9</option><option selected>SF10</option><option>SF11</option><option>SF12</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Bandwidth (kHz)</label>
+          <select class="form-input form-select" id="lora-bw"><option>125</option><option selected>250</option><option>500</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">TX power (dBm)</label>
+          <input class="form-input" id="lora-tx" type="number" value="14" min="2" max="20"/>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Device EUI</label><input class="form-input" id="lora-eui" placeholder="70B3D57ED0000000"/></div>
+      <div class="form-group"><label class="form-label">App key</label><input class="form-input" id="lora-key" type="password" placeholder="LoRaWAN app key"/></div>
+      <div id="lora-status" style="display:none" class="status-msg"></div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="UI.closeSheet('sh-lora')">Cancel</button>
+        <button class="btn btn-primary" onclick="NetworkManager.saveLora()">Apply &amp; connect</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Irrigate Sheet -->
+<div class="sheet-overlay" id="sh-irrigate">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header"><span class="sheet-title">Trigger irrigation</span><button class="sheet-close" onclick="UI.closeSheet('sh-irrigate')">×</button></div>
+    <div class="sheet-body">
+      <input type="hidden" id="irr-idx"/>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Duration (min)</label><input class="form-input" id="irr-dur" type="number" value="30" min="1" max="240"/></div>
+        <div class="form-group"><label class="form-label">Volume (L/m²)</label><input class="form-input" id="irr-vol" type="number" step="0.5" min="0.5"/></div>
+      </div>
+      <p class="form-hint">Command will be published to <code>agro/control</code> via active MQTT connection.</p>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="UI.closeSheet('sh-irrigate')">Cancel</button>
+        <button class="btn btn-primary" onclick="IrrigationController.trigger()">Start irrigation</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Alert Sheet -->
+<div class="sheet-overlay" id="sh-addalert">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header"><span class="sheet-title">New alert rule</span><button class="sheet-close" onclick="UI.closeSheet('sh-addalert')">×</button></div>
+    <div class="sheet-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Sensor</label>
+          <select class="form-input form-select" id="al-sensor">
+            <option>Soil Moisture</option><option>Temperature</option><option>Humidity</option><option>Light</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Condition</label>
+          <select class="form-input form-select" id="al-cond"><option value="below">Below</option><option value="above">Above</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Value *</label><input class="form-input" id="al-val" type="number" placeholder="e.g. 50"/></div>
+        <div class="form-group"><label class="form-label">Severity</label>
+          <select class="form-input form-select" id="al-sev"><option value="warn">Warning</option><option value="info">Info</option><option value="ok">OK</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Message *</label><input class="form-input" id="al-msg" placeholder="Alert message…"/></div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="UI.closeSheet('sh-addalert')">Cancel</button>
+        <button class="btn btn-primary" onclick="AlertManager.save()">Add rule</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Device Detail Sheet -->
+<div class="sheet-overlay" id="sh-devdetail">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header"><span class="sheet-title" id="dd-title">Device</span><button class="sheet-close" onclick="UI.closeSheet('sh-devdetail')">×</button></div>
+    <div class="sheet-body" id="dd-body"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MAIN APP SHELL
+═══════════════════════════════════════════ -->
+<div class="toast-stack" id="toasts"></div>
+
+<div class="app-shell">
+
+  <!-- HOME PAGE -->
+  <div class="page active" id="pg-home">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title">AgroSphere</div>
+        <div class="topbar-sub" id="farm-name-display">Green Valley Farm</div>
+      </div>
+      <div class="topbar-right">
+        <span class="pill pill-green" id="live-badge">
+          <span class="live-dot"></span> Live
+        </span>
+        <button class="btn-icon" onclick="SensorService.fetchAndUpdate()" title="Refresh">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M13.5 8A5.5 5.5 0 012.5 8M2.5 8l2-2M2.5 8l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="tile-grid" id="sensor-tiles"></div>
+
+      <!-- Irrigation Control Bar -->
+      <div class="irrigation-bar card" id="irrigation-bar">
+        <div class="irr-status-wrap">
+          <div class="irr-dot" id="irr-dot"></div>
+          <div>
+            <div class="irr-label">Irrigation</div>
+            <div class="irr-status" id="irr-status-text">Idle</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" id="irr-on-btn" onclick="IrrigationController.on()">Start</button>
+          <button class="btn btn-danger btn-sm" id="irr-off-btn" onclick="IrrigationController.off()" style="display:none">Stop</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-title">Moisture &amp; Temp — last 50 readings</span>
+          <div style="display:flex;gap:10px">
+            <span class="legend-dot" style="background:#1E88E5">Moisture</span>
+            <span class="legend-dot" style="background:#FB8C00">Temp</span>
+          </div>
+        </div>
+        <div class="chart-wrap" style="height:160px"><canvas id="chart-main"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-title">Alerts</span>
+          <button class="btn btn-sm btn-secondary" onclick="UI.openSheet('sh-addalert')">+ Rule</button>
+        </div>
+        <div id="home-alerts"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr"><span class="card-title">System status</span></div>
+        <div id="home-status"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CROPS PAGE -->
+  <div class="page" id="pg-crops">
+    <div class="topbar">
+      <div><div class="topbar-title">Crops</div><div class="topbar-sub">Water &amp; pesticide guide</div></div>
+      <div class="topbar-right">
+        <button class="btn btn-primary btn-sm" onclick="UI.openSheet('sh-addcrop')">+ Add crop</button>
+      </div>
+    </div>
+    <div class="content">
+      <div id="crops-list"></div>
+      <div class="card">
+        <div class="card-hdr"><span class="card-title">Weekly irrigation (L/m²)</span></div>
+        <div class="chart-wrap" style="height:160px"><canvas id="chart-schedule"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NETWORK PAGE -->
+  <div class="page" id="pg-network">
+    <div class="topbar">
+      <div><div class="topbar-title">Network</div><div class="topbar-sub">ESP32 connectivity</div></div>
+      <div class="topbar-right">
+        <button class="btn-icon" onclick="NetworkManager.scanAll()" title="Scan">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="content">
+      <!-- MQTT Status Card -->
+      <div class="card mqtt-status-card" id="mqtt-card">
+        <div class="card-hdr">
+          <span class="card-title">MQTT broker</span>
+          <span class="pill pill-gray" id="mqtt-pill">Disconnected</span>
+        </div>
+        <div id="mqtt-details">
+          <div class="detail-row"><span class="detail-key">Broker</span><span class="detail-val" id="mqtt-broker-val">broker.hivemq.com:8884</span></div>
+          <div class="detail-row"><span class="detail-key">Client ID</span><span class="detail-val" id="mqtt-client-id">—</span></div>
+          <div class="detail-row"><span class="detail-key">Subscribe</span><span class="detail-val">agro/sensor</span></div>
+          <div class="detail-row"><span class="detail-key">Publish</span><span class="detail-val">agro/control</span></div>
+          <div class="detail-row"><span class="detail-key">Last message</span><span class="detail-val" id="mqtt-last-msg">Never</span></div>
+          <div class="detail-row"><span class="detail-key">Messages recv.</span><span class="detail-val" id="mqtt-msg-count">0</span></div>
+          <div class="detail-row" id="mqtt-error-row" style="display:none"><span class="detail-key" style="color:var(--red)">Error</span><span class="detail-val" id="mqtt-error-val" style="color:var(--red)">—</span></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn btn-primary btn-sm" id="mqtt-connect-btn" onclick="MQTTService.connect()">Connect MQTT</button>
+          <button class="btn btn-danger btn-sm" id="mqtt-disconnect-btn" style="display:none" onclick="MQTTService.disconnect()">Disconnect</button>
+        </div>
+      </div>
+
+      <p class="section-hint">Tap a network to toggle. Only one active at a time. Active network drives all ESP32 devices.</p>
+
+      <!-- WiFi -->
+      <div class="net-option" id="net-wifi" onclick="NetworkManager.toggle('wifi')">
+        <div class="net-left">
+          <div class="net-icon-box" style="background:#E3F2FD">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M2 8.5c2-2.6 4.8-4.2 8-4.2s6 1.6 8 4.2M5.5 11.8c1.2-1.5 2.8-2.4 4.5-2.4s3.3.9 4.5 2.4M10 15.5h.01" stroke="#1565C0" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="net-name">Wi-Fi</div>
+            <div class="net-desc" id="wifi-desc">802.11n · 2.4 GHz</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="pill pill-gray" id="wifi-pill">Off</span>
+          <label class="ios-toggle" onclick="event.stopPropagation()">
+            <input type="checkbox" id="tog-wifi" onchange="NetworkManager.toggle('wifi')"/>
+            <span class="ios-track"></span>
+          </label>
+        </div>
+      </div>
+      <div class="net-detail-panel" id="detail-wifi">
+        <div class="detail-row"><span class="detail-key">Interface</span><span class="detail-val">Wi-Fi 802.11n</span></div>
+        <div class="detail-row"><span class="detail-key">IP address</span><span class="detail-val" id="d-wifi-ip">—</span></div>
+        <div class="detail-row"><span class="detail-key">Signal</span><span class="detail-val" id="d-wifi-sig">—</span></div>
+        <div class="detail-row"><span class="detail-key">Data rate</span><span class="detail-val">24 Mbps</span></div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="NetworkManager.openWifi()">Configure</button>
+          <button class="btn btn-outline btn-sm" onclick="NetworkManager.ping('WiFi ESP32')">Ping</button>
+        </div>
+      </div>
+
+      <!-- Bluetooth -->
+      <div class="net-option" id="net-bt" onclick="NetworkManager.toggle('bt')">
+        <div class="net-left">
+          <div class="net-icon-box" style="background:#E8EAF6">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M8 7l7 5-7 5V7zM8 12l5.5-5.5" stroke="#3949AB" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div class="net-name">Bluetooth</div>
+            <div class="net-desc" id="bt-desc">BLE 5.0 · Short range</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="pill pill-gray" id="bt-pill">Off</span>
+          <label class="ios-toggle" onclick="event.stopPropagation()">
+            <input type="checkbox" id="tog-bt" onchange="NetworkManager.toggle('bt')"/>
+            <span class="ios-track"></span>
+          </label>
+        </div>
+      </div>
+      <div class="net-detail-panel" id="detail-bt">
+        <div class="detail-row"><span class="detail-key">Protocol</span><span class="detail-val">Bluetooth LE 5.0</span></div>
+        <div class="detail-row"><span class="detail-key">Range</span><span class="detail-val">~100 m</span></div>
+        <div class="detail-row"><span class="detail-key">Paired devices</span><span class="detail-val" id="d-bt-paired">0</span></div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="UI.openSheet('sh-bt');NetworkManager.runBtScan()">Scan devices</button>
+          <button class="btn btn-outline btn-sm" onclick="NetworkManager.ping('BT ESP32')">Ping</button>
+        </div>
+      </div>
+
+      <!-- LoRa -->
+      <div class="net-option" id="net-lora" onclick="NetworkManager.toggle('lora')">
+        <div class="net-left">
+          <div class="net-icon-box" style="background:#F3E5F5">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10c0-3.9 3.1-7 7-7s7 3.1 7 7M5.5 10c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5M8 10c0-1.1.9-2 2-2s2 .9 2 2" stroke="#6A1B9A" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="10" r="1.2" fill="#6A1B9A"/></svg>
+          </div>
+          <div>
+            <div class="net-name">LoRa</div>
+            <div class="net-desc" id="lora-desc">915 MHz · Long range</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="pill pill-gray" id="lora-pill">Off</span>
+          <label class="ios-toggle" onclick="event.stopPropagation()">
+            <input type="checkbox" id="tog-lora" onchange="NetworkManager.toggle('lora')"/>
+            <span class="ios-track"></span>
+          </label>
+        </div>
+      </div>
+      <div class="net-detail-panel" id="detail-lora">
+        <div class="detail-row"><span class="detail-key">Frequency</span><span class="detail-val" id="d-lora-freq">915 MHz</span></div>
+        <div class="detail-row"><span class="detail-key">Range</span><span class="detail-val">~15 km</span></div>
+        <div class="detail-row"><span class="detail-key">Spreading factor</span><span class="detail-val" id="d-lora-sf">SF10</span></div>
+        <div class="detail-row"><span class="detail-key">TX power</span><span class="detail-val" id="d-lora-tx">14 dBm</span></div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="UI.openSheet('sh-lora')">Configure</button>
+          <button class="btn btn-outline btn-sm" onclick="NetworkManager.ping('LoRa node')">Ping</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:4px">
+        <div class="card-hdr"><span class="card-title">Active interface</span></div>
+        <div id="active-net-summary"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEVICES PAGE -->
+  <div class="page" id="pg-devices">
+    <div class="topbar">
+      <div><div class="topbar-title">Devices</div><div class="topbar-sub" id="dev-count-sub">ESP32 nodes</div></div>
+      <div class="topbar-right">
+        <button class="btn btn-primary btn-sm" onclick="UI.openSheet('sh-adddev')">+ Add</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="card"><div id="device-list"></div></div>
+      <div class="tile-grid" style="margin-top:12px">
+        <div class="tile"><div class="tile-label">Total</div><div class="tile-value" id="d-total">0</div><div class="tile-status s-good">Registered</div></div>
+        <div class="tile"><div class="tile-label">Online</div><div class="tile-value" id="d-online">0</div><div class="tile-status s-good">Active</div></div>
+        <div class="tile"><div class="tile-label">Data/min</div><div class="tile-value" id="d-rate">0</div><div class="tile-status s-good">Points</div></div>
+        <div class="tile"><div class="tile-label">Uptime</div><div class="tile-value">99<span class="tile-unit">%</span></div><div class="tile-status s-good">7 days</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><span class="card-title">Throughput — last hour</span></div>
+        <div class="chart-wrap" style="height:150px"><canvas id="chart-throughput"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS PAGE -->
+  <div class="page" id="pg-settings">
+    <div class="topbar">
+      <div><div class="topbar-title">Settings</div><div class="topbar-sub">App &amp; ESP32 config</div></div>
+    </div>
+    <div class="content">
+      <div class="settings-section">
+        <div class="settings-section-title">Farm</div>
+        <div class="card">
+          <div class="form-group"><label class="form-label">Farm name</label><input class="form-input" id="s-farmname" value="Green Valley Farm"/></div>
+          <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="s-location" value="Kolkata, West Bengal, India"/></div>
+          <div class="form-group" style="margin-bottom:0"><label class="form-label">Units</label>
+            <select class="form-input form-select" id="s-units"><option selected>Metric (°C, L, ha)</option><option>Imperial (°F, gal, ac)</option></select>
+          </div>
+          <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="SettingsManager.saveFarm()">Save farm info</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">ESP32 / MQTT</div>
+        <div class="card">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">MQTT broker host</label><input class="form-input" id="s-host" value="broker.hivemq.com"/></div>
+            <div class="form-group"><label class="form-label">Port (WSS)</label><input class="form-input" id="s-port" value="8884" type="number"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Sensor topic</label><input class="form-input" id="s-topic-sub" value="agro/sensor"/></div>
+            <div class="form-group"><label class="form-label">Control topic</label><input class="form-input" id="s-topic-pub" value="agro/control"/></div>
+          </div>
+          <div class="form-group" style="margin-bottom:0"><label class="form-label">Protocol</label>
+            <select class="form-input form-select" id="s-proto"><option>MQTT over WSS</option><option>HTTP REST</option></select>
+          </div>
+          <button class="btn btn-primary btn-full" style="margin-top:14px" onclick="SettingsManager.saveConn()">Save &amp; reconnect</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">Notifications</div>
+        <div class="card">
+          <div class="toggle-wrap">
+            <div class="toggle-info"><div class="toggle-label">Alert notifications</div><div class="toggle-desc">Popups for threshold breaches</div></div>
+            <label class="ios-toggle"><input type="checkbox" id="s-notif" checked onchange="SettingsManager.save('notif',this.checked)"><span class="ios-track"></span></label>
+          </div>
+          <div class="toggle-wrap">
+            <div class="toggle-info"><div class="toggle-label">Low moisture alerts</div><div class="toggle-desc">Warn below 50% soil moisture</div></div>
+            <label class="ios-toggle"><input type="checkbox" id="s-moist-alert" checked onchange="SettingsManager.save('moistAlert',this.checked)"><span class="ios-track"></span></label>
+          </div>
+          <div class="toggle-wrap">
+            <div class="toggle-info"><div class="toggle-label">High temperature alerts</div><div class="toggle-desc">Warn above 35°C</div></div>
+            <label class="ios-toggle"><input type="checkbox" id="s-temp-alert" checked onchange="SettingsManager.save('tempAlert',this.checked)"><span class="ios-track"></span></label>
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">Data</div>
+        <div class="card">
+          <div class="form-group"><label class="form-label">Polling interval</label>
+            <select class="form-input form-select" id="s-interval" onchange="SettingsManager.save('interval',this.value)">
+              <option value="5">Every 5 seconds</option><option value="10" selected>Every 10 seconds</option>
+              <option value="30">Every 30 seconds</option><option value="60">Every minute</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0"><label class="form-label">Data retention</label>
+            <select class="form-input form-select" id="s-retention"><option>7 days</option><option selected>30 days</option><option>90 days</option></select>
+          </div>
+          <button class="btn btn-danger btn-full" style="margin-top:14px" onclick="SettingsManager.clearAll()">Clear all local data</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">About</div>
+        <div class="card" style="font-size:13px;color:var(--muted)">
+          <div class="detail-row"><span class="detail-key">Version</span><span class="detail-val">2.1.0</span></div>
+          <div class="detail-row"><span class="detail-key">MQTT lib</span><span class="detail-val">Paho JS 1.1.0</span></div>
+          <div class="detail-row"><span class="detail-key">Build</span><span class="detail-val mono">2025-04-29</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <button class="nav-tab active" id="tab-home" onclick="UI.navTo('home',this)">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 9.5L11 3l8 6.5V19a1 1 0 01-1 1H6a1 1 0 01-1-1V9.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 20v-7h6v7" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      Home
+    </button>
+    <button class="nav-tab" id="tab-crops" onclick="UI.navTo('crops',this)">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 20V11M11 11C11 11 6 9 3.5 4.5c3 0 6.5 1.5 7.5 6.5zM11 11c0 0 5-1.5 7.5-6.5-3 0-6.5 1.5-7.5 6.5z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      Crops
+    </button>
+    <button class="nav-tab" id="tab-network" onclick="UI.navTo('network',this)">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M2 10c2.2-3 5.2-4.8 9-4.8s6.8 1.8 9 4.8M5.5 13.5c1.5-2 3.3-3.2 5.5-3.2s4 1.2 5.5 3.2M11 17.5h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      Network
+    </button>
+    <button class="nav-tab" id="tab-devices" onclick="UI.navTo('devices',this)">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="7" width="16" height="10" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 7V6M11 7V4M14 7V6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/></svg>
+      Devices
+    </button>
+    <button class="nav-tab" id="tab-settings" onclick="UI.navTo('settings',this)">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="2.5" stroke="currentColor" stroke-width="1.6"/><path d="M11 3v2M11 17v2M3 11h2M17 11h2M5.1 5.1l1.4 1.4M15.5 15.5l1.4 1.4M5.1 16.9l1.4-1.4M15.5 6.5l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      Settings
+    </button>
+  </nav>
+</div>
+
+<!-- JS Modules (order matters) -->
+<script src="js/utils/storage.js"></script>
+<script src="js/utils/helpers.js"></script>
+<script src="js/services/api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+<script src="js/services/mqtt.js"></script>
+<script src="js/components/charts.js"></script>
+<script src="js/components/ui.js"></script>
+<script src="js/components/alerts.js"></script>
+<script src="js/components/crops.js"></script>
+<script src="js/components/devices.js"></script>
+<script src="js/components/network.js"></script>
+<script src="js/components/irrigation.js"></script>
+<script src="js/components/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

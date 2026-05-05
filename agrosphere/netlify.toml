@@ -1,0 +1,18 @@
+# netlify.toml — Netlify deployment configuration
+
+[build]
+  publish = "."      # root of the project is the publish folder
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options        = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy        = "strict-origin-when-cross-origin"
+    Content-Security-Policy = "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self' wss://broker.hivemq.com:8884 https://broker.hivemq.com;"
+
+[[redirects]]
+  from   = "/api/*"
+  to     = "https://YOUR-ESP32-IP-OR-BACKEND/:splat"
+  status = 200
+  force  = false

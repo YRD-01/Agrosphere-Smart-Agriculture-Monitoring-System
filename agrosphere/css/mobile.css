@@ -1,0 +1,48 @@
+/* ═══════════════════════════════════════════
+   css/mobile.css  —  Responsive / mobile styles
+═══════════════════════════════════════════ */
+
+/* Tablet */
+@media (min-width: 600px) {
+  .tile-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .rec-row   { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .form-row  { grid-template-columns: 1fr 1fr; }
+  .content   { padding: 20px; max-width: 768px; margin: 0 auto; }
+}
+
+/* Desktop */
+@media (min-width: 960px) {
+  .bottom-nav { display: none; }
+  .app-shell  { flex-direction: row; padding-bottom: 0; }
+  .page.active { flex-direction: row; }
+
+  /* Sidebar nav */
+  .desktop-sidebar {
+    width: 220px; min-height: 100vh; background: #1B5E20;
+    display: flex; flex-direction: column;
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 200;
+  }
+  .main-area { margin-left: 220px; flex: 1; }
+
+  .content { max-width: 900px; }
+  .tile-grid { grid-template-columns: repeat(4, minmax(0,1fr)); }
+}
+
+/* Small phones */
+@media (max-width: 380px) {
+  .rec-row  { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .form-row { grid-template-columns: 1fr; }
+  .topbar-title { font-size: 15px; }
+  .tile-value   { font-size: 22px; }
+}
+
+/* Safe area for notch phones */
+.bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.sheet { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.content:last-child { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+
+/* iOS overscroll fix */
+body { overscroll-behavior: none; }
+.sheet { overscroll-behavior: contain; }
